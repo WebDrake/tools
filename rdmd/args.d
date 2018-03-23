@@ -56,6 +56,51 @@ struct RDMDArgs
     bool preserveOutputPaths; /// -op: preserve source path for output files
     string program; /// path to source file of program rdmd is to build
     string[] programArgs; /// arguments to be passed to the program rdmd is building
+
+/**
+Callback to use with `getopt` to handle output options (`-o...` flags)
+
+Parsed values will be used to determine the `outputFile`, `outputDir`
+and `preserveOutputPaths` fields of the struct instance.
+
+Params:
+    option = name of the option flag received by `getopt`
+             (should always be `"o"`)
+    value = value provided with the `-o` flag
+*/
+    private void parseOutputArg(string option, string value)
+    {
+        parseOutputArgImpl(this.outputFile, this.outputDir,
+                           this.preserveOutputPaths,
+                           option, value);
+    }
+}
+
+// test parseOutputArg method
+unittest
+{
+    // the bulk of testing is done in `parseOutputArgImpl`, so we
+    // just validate correct setting of fields
+    RDMDArgs args;
+
+    // `-od` flag results in `outputDir` being set
+    args.parseOutputArg("o", "doyoulikeme");
+    assert(args.outputDir == "oyoulikeme");
+    assert(args.outputFile is null); // not modified
+    assert(!args.preserveOutputPaths); // not modified
+
+    // `-of` flag results in `outputFile` being set; let's
+    // use `-of=` just to be different...
+    args.parseOutputArg("o", "f=reallyyoudo");
+    assert(args.outputDir == "oyoulikeme"); // not modified
+    assert(args.outputFile == "reallyyoudo");
+    assert(!args.preserveOutputPaths); // not modified
+
+    // `-op` flag results in `preserveOutputPaths being set
+    args.parseOutputArg("o", "p");
+    assert(args.outputDir == "oyoulikeme"); // not modified
+    assert(args.outputFile == "reallyyoudo"); // not modified
+    assert(args.preserveOutputPaths);
 }
 
 
@@ -113,6 +158,139 @@ unittest
 
     args ~= "anotherProgram";
     assert(indexOfProgram(args) == args.length - 3);
+}
+
+
+/**
+Parses output options (`-o` flags) received via `getopt`, and writes
+results into the provided output variables
+
+Params:
+    outputFile = string into which to write the path provided
+                 with the `-of` flag (`value == "f..."`)
+    outputDir = string into which to write the path provided
+                with the `-od` flag (`value == "d..."`)
+    preserveOutputPaths = bool into which to write `true` if
+                          an `-op` flag was provided
+                          (`value == "p"`)
+    option = name of the option flag received by `getopt`
+             (should always be `"o"`)
+    value = value provided with the `-o` flag: supported
+            choices are `"f..."`, `"d..."` and "p"
+*/
+private void parseOutputArgImpl(ref string outputFile, ref string outputDir,
+                                ref bool preserveOutputPaths,
+                                string option, string value)
+{
+    import std.exception: enforce;
+    enforce(option == "o", "Invalid output option: -" ~ option ~ value);
+    enforce(value.length > 0, "No value provided for -o option!");
+
+    import std.algorithm.searching : skipOver;
+
+    if (value.skipOver('f'))
+    {
+        // -ofmyfile passed
+        enforce(!outputFile.ptr, "Error: more than one -of provided!");
+        value.skipOver('='); // support -of... and -of=...
+        outputFile = value;
+    }
+    else if (value.skipOver('d'))
+    {
+        // -odmydir passed
+        enforce(!outputDir.ptr, "Error: more than one -od provided!");
+        value.skipOver('='); // support -od... and -od=...
+        outputDir = value;
+    }
+    else if (value == "-")
+    {
+        // -o- passed
+        enforce(false, "Option -o- currently not supported by rdmd");
+    }
+    else if (value == "p")
+    {
+        // -op passed
+        preserveOutputPaths = true;
+    }
+    else
+    {
+        enforce(false, "Unrecognized option: " ~ option ~ value);
+    }
+}
+
+unittest
+{
+    string of, od;
+    bool p;
+
+    import std.exception : assertThrown;
+
+    // unknown values will result in an exception
+    assertThrown(parseOutputArgImpl(of, od, p, "o", null));
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "my"));
+
+    // so too will the unsupported `-o-` option
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "-"));
+
+    // validate that -o- and -op options require exact match
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "-foo"));
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "pbar"));
+
+    // settings should not have been changed so far
+    assert(of is null);
+    assert(od is null);
+    assert(!p);
+
+    // `-op` will set the `preserve` parameter
+    parseOutputArgImpl(of, od, p, "o", "p");
+    assert(of is null); // not modified
+    assert(od is null); // not modified
+    assert(p);
+
+    // ... and we can support arbitrarily many
+    parseOutputArgImpl(of, od, p, "o", "p");
+    assert(of is null); // not modified
+    assert(od is null); // not modified
+    assert(p);
+
+    // `-od` flag will set the `od` parameter
+    p = false;
+    assert(!od.ptr);
+    parseOutputArgImpl(of, od, p, "o", "dfranklymydir");
+    assert(of is null); // not modified
+    assert(od == "franklymydir");
+    assert(!p); // not modified
+
+    // ... but another `-od` flag will result in an exception
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "dfranklyidontcare"));
+    assert(of is null); // not modified
+    assert(od == "franklymydir"); // not modified
+    assert(!p); // not modified
+
+    // `-of` flag will set the `of` parameter
+    assert(!of.ptr);
+    parseOutputArgImpl(of, od, p, "o", "formaybethis");
+    assert(of == "ormaybethis");
+    assert(od == "franklymydir"); // not modified
+    assert(!p); // not modified
+
+    // ... but another `-of` flag will result in an exception
+    assertThrown(parseOutputArgImpl(of, od, p, "o", "fortheloveof"));
+    assert(of == "ormaybethis"); // not modified
+    assert(od == "franklymydir"); // not modified
+    assert(!p); // not modified
+
+    // verify that `-of=` and `od=` are also supported
+    string ofe, ode;
+    parseOutputArgImpl(ofe, ode, p, "o", "d=anotherchoice");
+    assert(ofe is null); // not modified
+    assert(ode == "anotherchoice");
+    assert(!p); // not modified
+
+    parseOutputArgImpl(ofe, ode, p, "o", "f=oryetanother");
+    assert(ofe == "oryetanother");
+    assert(ode == "anotherchoice"); // not modified
+    assert(!p); // not modified
 }
 
 

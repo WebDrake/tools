@@ -30,6 +30,36 @@ struct RDMDGlobalArgs
 
 
 /**
+Struct to hold parsed values from command-line arguments
+*/
+struct RDMDArgs
+{
+    bool buildOnly; /// --dry-run: only build programs, do not run
+    bool chatty; /// --chatty: verbose output
+    string compiler; /// --compiler: user-specified compiler to use
+    string[] compilerFlags; /// flags to pass on directly to the D compiler
+    bool dryRun; /// --dry-run: do not compile, just show what commands would run
+    string[] eval; /// --eval: evaluate provided code as in `perl -e`
+    string[] exclusions; /// --exclude: packages to exclude from the build
+    string[] extraFiles; /// --extra-file: extra files to include in compilation
+    bool force; /// --force: force a rebuild even if not necessary
+    bool help; /// --help: output help text and exit
+    string[] inclusions; /// --include: packages for which to override --exclude options
+    string[] loop; /// --loop: evaluate provided code inside loop over stdin lines
+    bool addStubMain; /// --main:
+    bool makeDepend; /// --makedepend:
+    string makeDepFile; /// --makedepfile:
+    bool man; /// --man
+    string outputFile; /// -of...: path of output file for the D compiler to write to
+    string outputDir; /// -od...: path of output dir for the D compiler to write to
+    string userTempDir; /// temporary directory to use instead of default
+    bool preserveOutputPaths; /// -op: preserve source path for output files
+    string program; /// path to source file of program rdmd is to build
+    string[] programArgs; /// arguments to be passed to the program rdmd is building
+}
+
+
+/**
 Find the index in an array of command-line arguments where
 the program to compile is specified
 

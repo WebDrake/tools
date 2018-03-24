@@ -160,6 +160,125 @@ unittest
     assert(indexOfProgram(args) == args.length - 3);
 }
 
+/**
+Parses command-line arguments and returns a read-only data structure
+containing all the settings provided
+
+Params:
+    cliArgs = array of command-line arguments, stripped
+              of any --shebang
+
+Returns:
+    read-only `RDMDArgs` instance with fields set in accordance
+    with the arguments provided
+*/
+const(RDMDArgs) parseArgs(string[] cliArgs)
+{
+    import std.exception : enforce;
+    enforce(cliArgs.length > 0, "Command-line arguments are empty!");
+
+    RDMDArgs args;
+
+    auto programPos = indexOfProgram(cliArgs);
+    assert(programPos > 0);
+
+    if (programPos < cliArgs.length)
+    {
+        args.program = cliArgs[programPos].dup;
+        args.programArgs = cliArgs[programPos + 1 .. $];
+        // ensure !length == !ptr for programArgs
+        if (!args.programArgs.length) args.programArgs = null;
+    }
+
+    auto argsBeforeProgram = cliArgs[0 .. programPos];
+
+    import std.getopt;
+    getopt(argsBeforeProgram,
+           std.getopt.config.caseSensitive,
+           std.getopt.config.passThrough,
+           "build-only", &args.buildOnly,
+           "chatty", &args.chatty,
+           "compiler", &args.compiler,
+           "dry-run", &args.dryRun,
+           "eval", &args.eval,
+           "loop", &args.loop,
+           "exclude", &args.exclusions,
+           "include", &args.inclusions,
+           "extra-file", &args.extraFiles,
+           "force", &args.force,
+           "help", &args.help,
+           "main", &args.addStubMain,
+           "makedepend", &args.makeDepend,
+           "makedepfile", &args.makeDepFile,
+           "man", &args.man,
+           "tmpdir", &args.userTempDir,
+           "o", &args.parseOutputArg);
+
+    // any left over command-line arguments apart from the
+    // first should be passed on through to the D compiler
+    assert(argsBeforeProgram.length >= 1);
+    if (argsBeforeProgram.length > 1)
+        args.compilerFlags = argsBeforeProgram[1 .. $];
+
+    return args;
+}
+
+unittest
+{
+    // most of the legwork is done by `getopt`, so we'll only
+    // unittest the custom arguments handling
+
+    // empty arguments are not acceptable
+    import std.exception : assertThrown;
+    assertThrown(parseArgs(null));
+
+    // with no arguments other than the first, we should get
+    // back a default-initialized `RDMDArgs` instance
+    assert(parseArgs(["rdmd"]) == RDMDArgs.init);
+    assert(parseArgs(["whatever"]) == RDMDArgs.init);
+
+    // apart from stuff handled with getopt, we now have 3
+    // custom cases to test:
+
+    // more than 1 argument but no program entry
+    {
+        auto args = parseArgs(["whoami", "--help", "--force", "--main"]);
+        assert(!args.program.ptr);
+        assert(!args.programArgs.ptr);
+        assert(args.help);
+        assert(args.force);
+        assert(args.addStubMain);
+    }
+
+    // program entry at the end of the arguments list
+    {
+        auto args = parseArgs(["rdmd", "--build-only", "myprog"]);
+        assert(args.program == "myprog");
+        assert(!args.programArgs.ptr);
+        assert(args.buildOnly);
+    }
+
+    // program entry followed by program arguments
+    {
+        auto args = parseArgs(["hammer-horror", "--dry-run", "some.d",
+                               "--wish", "--upon-a-star"]);
+        assert(args.program == "some.d");
+        assert(args.programArgs == ["--wish", "--upon-a-star"]);
+        assert(args.dryRun);
+        // just to emphasize: args parsing does not automatically
+        // set `chatty` because of `dryRun`
+        assert(!args.chatty);
+    }
+
+    // flags specific to the D compiler and not used by rdmd
+    {
+        auto args = parseArgs(["dracula", "-color", "-cov", "bloodred.d"]);
+        assert(args.compilerFlags == ["-color", "-cov"]);
+        assert(args.program == "bloodred.d");
+        assert(!args.programArgs.ptr);
+    }
+}
+
 
 /**
 Parses output options (`-o` flags) received via `getopt`, and writes

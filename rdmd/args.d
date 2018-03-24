@@ -27,3 +27,53 @@ struct RDMDGlobalArgs
 
     string compiler = RDMDConfig.defaultCompiler; /// D compiler to use
 }
+
+
+/**
+Strip the --shebang flag from command line arguments
+
+Params:
+    cliArgs = raw command-line arguments received by
+              `main` function
+
+Returns:
+    `cliArgs` unchanged if no `--shebang` flag is present
+    in index 1; otherwise, strips the `--shebang` flag
+    itself and expands its arguments
+*/
+string[] stripShebang(string[] cliArgs)
+{
+    import std.algorithm.searching : startsWith;
+    if (cliArgs.length > 1 && cliArgs[1].startsWith("--shebang ", "--shebang="))
+    {
+        // multiple options wrapped in one, we need to expand
+        auto a = cliArgs[1]["--shebang ".length .. $];
+        import std.array : split;
+        return cliArgs[0 .. 1] ~ split(a) ~ cliArgs[2 .. $];
+    }
+    else
+    {
+        return cliArgs;
+    }
+}
+
+unittest
+{
+    auto cliArgs = ["whatever", "you", "like", "it", "doesn't", "matter", "if",
+                    "there", "is", "no", "shebang", "in", "index", "1"];
+
+    assert(stripShebang(cliArgs.dup) == cliArgs); // dup just to be safe
+
+    cliArgs = ["some-program", "--shebang followed by others", "and", "the", "rest"];
+    auto expected = ["some-program", "followed", "by", "others", "and", "the", "rest"];
+
+    // with --shebang in index 1 it will be stripped out
+    assert(stripShebang(cliArgs.dup) == expected);
+    // ... but not if it's in index 0
+    assert(stripShebang(cliArgs[1 .. $].dup) == cliArgs[1 .. $]);
+
+    // repeat with --shebang= to check that this works too
+    cliArgs = ["some-program", "--shebang=followed by others", "and", "the", "rest"];
+    assert(stripShebang(cliArgs.dup) == expected);
+    assert(stripShebang(cliArgs[1 .. $].dup) == cliArgs[1 .. $]);
+}

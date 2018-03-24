@@ -299,22 +299,6 @@ int main(string[] args)
     return exec(RDMDGlobalArgs.exe ~ programArgs);
 }
 
-size_t indexOfProgram(string[] args)
-{
-    foreach(i; 1 .. args.length)
-    {
-        auto arg = args[i];
-        if (!arg.startsWith('-', '@') &&
-                !arg.endsWith(".obj", ".o", ".lib", ".a", ".def", ".map", ".res") &&
-                args[i - 1] != "--eval")
-        {
-            return i;
-        }
-    }
-
-    return args.length;
-}
-
 void writeDeps(string exe, string root, in string[string] myDeps, File fo)
 {
     fo.writeln(exe, ": \\");

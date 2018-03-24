@@ -30,6 +30,63 @@ struct RDMDGlobalArgs
 
 
 /**
+Find the index in an array of command-line arguments where
+the program to compile is specified
+
+Params:
+    cliArgs = array of command-line arguments, stripped
+              of any --shebang
+
+Returns:
+    index in `cliArgs` where the program to compile is
+    specified, or `cliArgs.length` if none is present
+*/
+size_t indexOfProgram(string[] cliArgs)
+{
+    import std.exception : enforce;
+    enforce(cliArgs.length > 0, "Command-line arguments are empty!");
+
+    foreach(i; 1 .. cliArgs.length)
+    {
+        auto arg = cliArgs[i];
+        assert(arg.length > 0);
+        import std.algorithm.searching : endsWith, startsWith;
+        if (!arg.startsWith('-', '@') &&
+            !arg.endsWith(".obj", ".o", ".lib", ".a", ".def", ".map", ".res") &&
+            cliArgs[i - 1] != "--eval")
+        {
+            return i;
+        }
+    }
+
+    return cliArgs.length;
+}
+
+unittest
+{
+    import std.exception: assertThrown;
+    assertThrown(indexOfProgram([]));
+
+    string[] args = ["blah"];
+    assert(indexOfProgram(args) == args.length);
+
+    args = ["blah", "-who", "@what", "where.obj", "why.o",
+            "are.a", "you.def", "sure.map", "about.res",
+            "--this", "--eval", "something"];
+    assert(indexOfProgram(args) == args.length);
+
+    args ~= "thisProgram";
+    assert(indexOfProgram(args) == args.length - 1);
+
+    args ~= "--another-arg";
+    assert(indexOfProgram(args) == args.length - 2);
+
+    args ~= "anotherProgram";
+    assert(indexOfProgram(args) == args.length - 3);
+}
+
+
+/**
 Strip the --shebang flag from command line arguments
 
 Params:

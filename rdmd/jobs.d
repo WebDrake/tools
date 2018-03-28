@@ -7,6 +7,49 @@ module rdmd.jobs;
 import rdmd.args;
 
 /**
+Calculate the D compiler to be used for an rdmd build job
+
+Params:
+    args = parsed arguments settings
+
+Returns:
+    path to or name of the D compiler rdmd should invoke
+*/
+string rdmdCompiler(in RDMDArgs args)
+{
+    if (args.compiler.length > 0)
+        return args.compiler;
+
+    import rdmd.config : RDMDConfig;
+    import std.file : exists, isFile, thisExePath;
+    import std.path : buildPath, dirName;
+    auto compilerPath =
+        thisExePath().dirName.buildPath(RDMDConfig.defaultCompiler);
+
+    import rdmd.filesystem : Filesystem;
+    if (Filesystem.existsAsFile(compilerPath))
+        return compilerPath;
+
+    return RDMDConfig.defaultCompiler;
+}
+
+unittest
+{
+    RDMDArgs args;
+
+    // if no compiler is set in `args`, the result is
+    // context-dependent, but we can be sure that the
+    // result ends with the default compiler name
+    import std.algorithm.searching : endsWith;
+    assert(args.rdmdCompiler.endsWith(RDMDConfig.defaultCompiler));
+
+    // otherwise, we just get what is set in `args`
+    args.compiler = "sdc";
+    assert(args.rdmdCompiler == "sdc");
+}
+
+
+/**
 Calculate the path to the temporary directory for an
 rdmd build job
 

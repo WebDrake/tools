@@ -46,6 +46,7 @@ RDMD_SRC = rdmd/main.d \
            rdmd/config.d \
            rdmd/eval.d \
            rdmd/filesystem.d \
+           rdmd/jobs.d \
            rdmd/verbose.d
 
 SRCS=dman.d $(RDMD_SRC) ddemangle.d
